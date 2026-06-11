@@ -1,0 +1,7 @@
+torch
+numpy
+jsonschema
+transformers
+accelerate
+pytest
+pyyaml

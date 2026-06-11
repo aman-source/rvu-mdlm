@@ -1,0 +1,9 @@
+K: 8
+lambda: 5.0
+tau_f: 0.7
+steps: 16
+device: cpu
+model: tiny
+seeds: [42, 123, 456]
+max_len: 64
+vocab_size: null  # set by tokenizer
