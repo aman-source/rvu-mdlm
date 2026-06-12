@@ -1,0 +1,22 @@
+{
+  "schema_valid_rate": 0.7692,
+  "mean_reward": 0.8538,
+  "per_tier_valid_rate": {
+    "T1": 0.9231,
+    "T2": 0.7692,
+    "T3": 0.6923,
+    "T4": 0.6923
+  },
+  "per_tier_mean_reward": {
+    "T1": 0.9231,
+    "T2": 0.8615,
+    "T3": 0.8,
+    "T4": 0.8308
+  },
+  "mean_reward_calls": 246.92,
+  "mean_forward_passes": 30.87,
+  "mean_wall_time_s": 2.8679,
+  "run_id": "rvu_56d57819_42_20260612_111616",
+  "decoder": "rvu",
+  "n_cases": 52
+}
