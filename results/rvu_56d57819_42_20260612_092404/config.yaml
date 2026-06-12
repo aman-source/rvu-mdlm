@@ -1,0 +1,16 @@
+K: 8
+b1_batch_size: 16
+dataset_path: data/kill_test_cases.jsonl
+decoder: rvu
+device: cuda:0
+lambda: 5.0
+limit: 200
+max_len: 256
+model: llada
+model_path: GSAI-ML/LLaDA-8B-Instruct
+n_eval_cases: 200
+run_id: rvu_56d57819_42_20260612_092404
+seeds:
+- 42
+steps: 32
+tau_f: 0.7
