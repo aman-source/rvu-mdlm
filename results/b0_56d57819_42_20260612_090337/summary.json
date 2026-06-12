@@ -1,0 +1,22 @@
+{
+  "schema_valid_rate": 0.735,
+  "mean_reward": 0.7993,
+  "per_tier_valid_rate": {
+    "T1": 0.84,
+    "T2": 0.58,
+    "T3": 0.56,
+    "T4": 0.96
+  },
+  "per_tier_mean_reward": {
+    "T1": 0.87,
+    "T2": 0.679,
+    "T3": 0.676,
+    "T4": 0.972
+  },
+  "mean_reward_calls": 0.0,
+  "mean_forward_passes": 30.35,
+  "mean_wall_time_s": 2.1769,
+  "run_id": "b0_56d57819_42_20260612_090337",
+  "decoder": "b0",
+  "n_cases": 200
+}
