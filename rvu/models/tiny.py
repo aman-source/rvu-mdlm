@@ -105,6 +105,21 @@ class TinyMDLM(MDLM):
         x = self.ln_final(x)
         return self.head(x)  # [L, V]
 
+    @torch.no_grad()
+    def logits_batch(self, canvases: Tensor) -> Tensor:
+        """Batched forward pass: canvases [B, L] -> logits [B, L, V]."""
+        B, L = canvases.shape
+        assert L <= self.max_len, f"Canvas length {L} exceeds max_len {self.max_len}"
+
+        canvases = canvases.to(self.device)
+        positions = torch.arange(L, device=self.device)
+
+        x = self.embed(canvases) + self.pos_embed(positions)  # [B, L, D]
+        for block in self.blocks:
+            x = block(x)
+        x = self.ln_final(x)
+        return self.head(x)  # [B, L, V]
+
     def param_count(self) -> int:
         """Total number of parameters."""
         return sum(p.numel() for p in self.parameters())

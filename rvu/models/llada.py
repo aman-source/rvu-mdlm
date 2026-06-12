@@ -67,6 +67,16 @@ class LLaDAMDLM(MDLM):
         # outputs.logits: [1, L, V] in bf16 → cast to float32
         return outputs.logits[0].float()
 
+    @torch.no_grad()
+    def logits_batch(self, canvases: Tensor) -> Tensor:
+        """Batched forward pass: canvases [B, L] → logits [B, L, V].
+
+        True batched inference. Returns float32 logits.
+        """
+        canvases = canvases.to(self.device)
+        outputs = self._model(input_ids=canvases)
+        return outputs.logits.float()  # [B, L, V]
+
     def format_prompt(self, user_message: str) -> str:
         """Format a user message using the chat template.
 

@@ -7,7 +7,7 @@ import pytest
 import torch
 from torch import Tensor
 
-from rvu.decoding.best_of_n import BestOfNDecoder, BestOfNTrace, matched_n
+from rvu.decoding.best_of_n import BestOfNDecoder, BestOfNTrace, matched_n, matched_n_per_case
 from rvu.decoding.vanilla import VanillaDecoder
 from rvu.models.base import MDLM
 from rvu.rewards.base import Reward
@@ -405,3 +405,130 @@ class TestNoMaskInOutput:
         }
         result = decoder.decode(model, prompt_ids=None, config=config)
         assert (result.token_ids != mask_id).all()
+
+
+# ---------------------------------------------------------------------------
+# Batched rollouts
+# ---------------------------------------------------------------------------
+
+
+class TestBatchedChunking:
+    """Chunking math: N=10, batch=4 → chunks 4,4,2."""
+
+    def test_chunking_reward_count(self):
+        """N=10 with batch_size=4 → 3 chunks, still exactly 10 reward calls."""
+        L, V = 4, 6
+        mask_id = 5
+        logits = torch.zeros(L, V)
+        for i in range(L):
+            logits[i, i % (V - 1)] = 10.0
+        model = FixedLogitsModel(fixed_logits=logits, mask_id=mask_id, vocab_size=V)
+
+        reward = ConstantReward(0.5)
+        decoder = BestOfNDecoder(reward=reward)
+        config = {
+            "N": 10, "steps": 4, "max_len": 4,
+            "temperature": 0.7, "seed": 42, "device": "cpu",
+            "b1_batch_size": 4,
+        }
+        result = decoder.decode(model, prompt_ids=None, config=config)
+        assert result.reward_calls_used == 10
+        assert reward.call_count == 10
+
+    def test_batch_size_larger_than_n(self):
+        """batch_size > N: single chunk, works fine."""
+        L, V = 4, 6
+        mask_id = 5
+        logits = torch.zeros(L, V)
+        for i in range(L):
+            logits[i, i % (V - 1)] = 10.0
+        model = FixedLogitsModel(fixed_logits=logits, mask_id=mask_id, vocab_size=V)
+
+        reward = ConstantReward(0.5)
+        decoder = BestOfNDecoder(reward=reward)
+        config = {
+            "N": 3, "steps": 4, "max_len": 4,
+            "temperature": 0.7, "seed": 42, "device": "cpu",
+            "b1_batch_size": 32,
+        }
+        result = decoder.decode(model, prompt_ids=None, config=config)
+        assert result.reward_calls_used == 3
+        assert reward.call_count == 3
+
+    def test_batch_size_1_sequential(self):
+        """batch_size=1 → fully sequential, same as old behavior."""
+        L, V = 4, 6
+        mask_id = 5
+        logits = torch.zeros(L, V)
+        for i in range(L):
+            logits[i, i % (V - 1)] = 10.0
+        model = FixedLogitsModel(fixed_logits=logits, mask_id=mask_id, vocab_size=V)
+
+        reward = ConstantReward(0.5)
+        decoder = BestOfNDecoder(reward=reward)
+        config = {
+            "N": 5, "steps": 4, "max_len": 4,
+            "temperature": 0.7, "seed": 42, "device": "cpu",
+            "b1_batch_size": 1,
+        }
+        result = decoder.decode(model, prompt_ids=None, config=config)
+        assert result.reward_calls_used == 5
+
+
+class TestBatchedBudgetMatch:
+    """B1 batched budget still matches RVU per-case."""
+
+    def test_budget_matches_rvu(self):
+        from rvu.decoding.rvu import RVUDecoder
+
+        L, V = 12, 5
+        mask_id = 4
+        logits = torch.zeros(L, V)
+        for i in range(L):
+            logits[i, i % (V - 1)] = 10.0
+        model = FixedLogitsModel(fixed_logits=logits, mask_id=mask_id, vocab_size=V)
+
+        prompt = torch.tensor([0, 1, 2, 0, 1], dtype=torch.long)
+        K, S = 2, 4
+
+        # RVU
+        rvu_reward = ConstantReward(0.5)
+        rvu_decoder = RVUDecoder(reward=rvu_reward)
+        rvu_result = rvu_decoder.decode(model, prompt, {
+            "steps": S, "max_len": L, "K": K,
+            "tau_f": 0.7, "lambda": 5.0, "seed": 42, "device": "cpu",
+        })
+
+        # B1 batched
+        N = matched_n_per_case(len(prompt), L, S, K)
+        b1_reward = ConstantReward(0.5)
+        b1_decoder = BestOfNDecoder(reward=b1_reward)
+        b1_result = b1_decoder.decode(model, prompt, {
+            "steps": S, "max_len": L, "N": N,
+            "temperature": 0.7, "seed": 42, "device": "cpu",
+            "b1_batch_size": 4,
+        })
+
+        assert b1_result.reward_calls_used == rvu_result.reward_calls_used
+
+
+class TestBatchedLogits:
+    """logits_batch produces correct shapes and matches logits."""
+
+    def test_tiny_batch_matches_sequential(self):
+        """TinyMDLM.logits_batch([B,L]) == stack of logits([L]) for each."""
+        from rvu.models.tiny import TinyMDLM
+        model = TinyMDLM(max_len=16, device="cpu")
+
+        # Build 3 random canvases
+        canvases = torch.randint(0, model.vocab_size, (3, 16))
+        canvases[0, 5:] = model.mask_id
+        canvases[1, 3:] = model.mask_id
+        canvases[2, 8:] = model.mask_id
+
+        batched = model.logits_batch(canvases)
+        assert batched.shape == (3, 16, model.vocab_size)
+
+        for i in range(3):
+            sequential = model.logits(canvases[i])
+            assert torch.allclose(batched[i], sequential, atol=1e-5)

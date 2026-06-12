@@ -38,6 +38,13 @@ class MDLM(ABC):
         """
         ...
 
+    def logits_batch(self, canvases: Tensor) -> Tensor:
+        """Batched forward pass: canvases [B, L] → logits [B, L, V].
+
+        Default: loops over batch calling logits(). Override for true batching.
+        """
+        return torch.stack([self.logits(c) for c in canvases])
+
     def is_masked(self, canvas: Tensor) -> Tensor:
         """Return boolean mask: True where canvas == mask_id.
 
