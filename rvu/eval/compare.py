@@ -55,7 +55,7 @@ def compare(run_dirs: List[str]) -> str:
     header = ["decoder", "valid%", "mean_rwd"]
     for t in tier_cols:
         header.append(f"{t}_%")
-    header.extend(["rwd_calls", "time_s"])
+    header.extend(["rwd_calls", "fwd_pass", "time_s"])
 
     rows = []
     for s, c in zip(summaries, configs):
@@ -69,9 +69,10 @@ def compare(run_dirs: List[str]) -> str:
             tier_vals.append(f"{rate*100:.1f}")
 
         rwd_calls = f"{s['mean_reward_calls']:.0f}"
+        fwd_pass = f"{s.get('mean_forward_passes', 0):.0f}"
         time_s = f"{s['mean_wall_time_s']:.2f}"
 
-        row = [decoder, valid_pct, mean_rwd] + tier_vals + [rwd_calls, time_s]
+        row = [decoder, valid_pct, mean_rwd] + tier_vals + [rwd_calls, fwd_pass, time_s]
         rows.append(row)
 
     # Format table

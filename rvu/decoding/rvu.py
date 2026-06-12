@@ -56,6 +56,7 @@ class RVUDecoder(Decoder):
 
         trace: List[RVUStepTrace] = []
         total_reward_calls = 0
+        total_forward_passes = 0
 
         for step_idx in range(steps):
             mask = model.is_masked(canvas)
@@ -67,8 +68,9 @@ class RVUDecoder(Decoder):
             steps_left = steps - step_idx
             n_commit = commit_schedule(n_masked, steps_left)
 
-            # --- 1. Forward pass ---
+            # --- 1. Forward pass (1 per step) ---
             logits = model.logits(canvas)  # [L, V]
+            total_forward_passes += 1
             logits[:, model.mask_id] = float("-inf")
             probs = F.softmax(logits, dim=-1)  # [L, V]
 
@@ -192,6 +194,7 @@ class RVUDecoder(Decoder):
             text=text,
             trace=trace,
             reward_calls_used=total_reward_calls,
+            forward_passes=total_forward_passes,
             prompt_len=prompt_len,
             config=config,
         )

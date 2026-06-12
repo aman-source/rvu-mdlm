@@ -60,6 +60,7 @@ class VanillaDecoder(Decoder):
             gen.manual_seed(seed)
 
         trace: List[StepTrace] = []
+        total_forward_passes = 0
 
         for step_idx in range(steps):
             mask = model.is_masked(canvas)
@@ -71,8 +72,9 @@ class VanillaDecoder(Decoder):
             steps_left = steps - step_idx
             n_commit = commit_schedule(n_masked, steps_left)
 
-            # Forward pass
+            # Forward pass (1 per step)
             logits = model.logits(canvas)  # [L, V]
+            total_forward_passes += 1
 
             # Suppress mask token: never commit a mask_id token
             logits[:, model.mask_id] = float("-inf")
@@ -124,6 +126,7 @@ class VanillaDecoder(Decoder):
             text=text,
             trace=trace,
             reward_calls_used=0,
+            forward_passes=total_forward_passes,
             prompt_len=prompt_len,
             config=config,
         )

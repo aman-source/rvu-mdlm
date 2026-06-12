@@ -37,6 +37,7 @@ class DecodeResult:
     text: str                  # detokenized completion text (prompt excluded, EOS-stripped)
     trace: List[StepTrace]     # per-step trace
     reward_calls_used: int     # 0 for B0
+    forward_passes: int = 0    # number of model forward calls (batched counts as batch_size)
     prompt_len: int = 0        # number of prompt tokens (completion = token_ids[prompt_len:])
     config: Dict[str, Any] = field(default_factory=dict)
 

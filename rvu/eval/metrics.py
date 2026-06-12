@@ -21,6 +21,7 @@ def compute_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             "per_tier_valid_rate": {},
             "per_tier_mean_reward": {},
             "mean_reward_calls": 0.0,
+            "mean_forward_passes": 0.0,
             "mean_wall_time_s": 0.0,
         }
 
@@ -28,6 +29,7 @@ def compute_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     valid_count = sum(1 for r in results if r["schema_valid"])
     total_reward = sum(r["final_reward"] for r in results)
     total_calls = sum(r["reward_calls_used"] for r in results)
+    total_fwd = sum(r.get("forward_passes", 0) for r in results)
     total_time = sum(r["wall_time_s"] for r in results)
 
     # Per-tier
@@ -51,5 +53,6 @@ def compute_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "per_tier_valid_rate": per_tier_valid,
         "per_tier_mean_reward": per_tier_reward,
         "mean_reward_calls": round(total_calls / n, 2),
+        "mean_forward_passes": round(total_fwd / n, 2),
         "mean_wall_time_s": round(total_time / n, 4),
     }

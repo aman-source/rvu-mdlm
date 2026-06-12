@@ -85,6 +85,7 @@ def run_harness(
     decoder_name: str,
     limit: Optional[int] = None,
     dataset_path_override: Optional[str] = None,
+    subset_per_tier: Optional[int] = None,
 ) -> str:
     """Run eval harness. Returns path to results directory."""
     # Load config
@@ -105,6 +106,16 @@ def run_harness(
 
     # Load dataset
     cases = load_dataset(ds_path, limit=limit)
+    if subset_per_tier is not None:
+        # Stratified subset: first N cases per tier
+        tier_counts: Dict[int, int] = {}
+        filtered = []
+        for c in cases:
+            t = c["tier"]
+            tier_counts[t] = tier_counts.get(t, 0) + 1
+            if tier_counts[t] <= subset_per_tier:
+                filtered.append(c)
+        cases = filtered
     print(f"Loaded {len(cases)} cases from {ds_path}")
 
     # Build model
@@ -167,9 +178,14 @@ def run_harness(
                 decode_config.update({"K": K, "tau_f": tau_f, "lambda": lam_val})
                 case_decoder = RVUDecoder(reward=decode_reward)
             elif decoder_name == "b1":
-                # Per-case budget matching
-                N = matched_n_per_case(prompt_len, max_len, steps, K)
-                decode_config.update({"N": N, "temperature": tau_f})
+                # b1_n overrides per-case budget matching
+                b1_n_override = config.get("b1_n", None)
+                if b1_n_override is not None:
+                    N = b1_n_override
+                else:
+                    N = matched_n_per_case(prompt_len, max_len, steps, K)
+                b1_bs = config.get("b1_batch_size", 16)
+                decode_config.update({"N": N, "temperature": tau_f, "b1_batch_size": b1_bs})
                 case_decoder = BestOfNDecoder(reward=decode_reward)
             else:
                 raise ValueError(f"Unknown decoder: {decoder_name}")
@@ -197,6 +213,7 @@ def run_harness(
                 "final_reward": final_score,
                 "schema_valid": schema_valid,
                 "reward_calls_used": result.reward_calls_used,
+                "forward_passes": result.forward_passes,
                 "prompt_len": prompt_len,
                 "steps": steps,
                 "wall_time_s": round(wall_time, 4),
@@ -253,6 +270,8 @@ def main():
                         help="Max cases to evaluate")
     parser.add_argument("--dataset", type=str, default=None,
                         help="Override dataset path")
+    parser.add_argument("--subset-per-tier", type=int, default=None,
+                        help="Take first N cases per tier (stratified subset)")
     args = parser.parse_args()
 
     run_harness(
@@ -260,6 +279,7 @@ def main():
         decoder_name=args.decoder,
         limit=args.limit,
         dataset_path_override=args.dataset,
+        subset_per_tier=args.subset_per_tier,
     )
 
 

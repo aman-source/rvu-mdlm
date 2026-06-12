@@ -8,7 +8,7 @@ Rollouts are decoded in chunks of b1_batch_size using batched forward passes.
 
 from dataclasses import dataclass, field
 from math import ceil
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -48,14 +48,15 @@ def _decode_batch_sampled(
     device: torch.device,
     temperature: float,
     seeds: List[int],
-) -> List[Tensor]:
+) -> Tuple[List[Tensor], int]:
     """Decode a batch of sampled rollouts in parallel.
 
     Args:
         seeds: One seed per rollout in this batch (len == batch_size).
 
     Returns:
-        List of [L] token ID tensors, one per rollout.
+        (canvases, forward_passes): list of [L] tensors + forward pass count.
+        A batched call with B sequences counts as B forward passes.
     """
     B = batch_size
     L = max_len
@@ -76,6 +77,8 @@ def _decode_batch_sampled(
         g.manual_seed(s)
         gens.append(g)
 
+    forward_passes = 0
+
     for step_idx in range(steps):
         # Check masks — all rollouts share same mask structure at start,
         # but diverge after first commit. Use per-rollout mask.
@@ -92,8 +95,9 @@ def _decode_batch_sampled(
         steps_left = steps - step_idx
         n_commit = commit_schedule(n_masked, steps_left)
 
-        # Batched forward pass
+        # Batched forward pass (counts as B forward passes)
         all_logits = model.logits_batch(canvases)  # [B, L, V]
+        forward_passes += B
 
         # Suppress mask token
         all_logits[:, :, model.mask_id] = float("-inf")
@@ -125,7 +129,7 @@ def _decode_batch_sampled(
 
             canvases[b, top_indices] = selected
 
-    return [canvases[b] for b in range(B)]
+    return [canvases[b] for b in range(B)], forward_passes
 
 
 class BestOfNDecoder(Decoder):
@@ -155,6 +159,7 @@ class BestOfNDecoder(Decoder):
 
         all_canvases: List[Tensor] = []
         all_rewards: List[float] = []
+        total_forward_passes = 0
 
         # Process in chunks
         for chunk_start in range(0, N, batch_size):
@@ -162,7 +167,7 @@ class BestOfNDecoder(Decoder):
             chunk_n = chunk_end - chunk_start
             chunk_seeds = [seed * 100000 + i for i in range(chunk_start, chunk_end)]
 
-            chunk_canvases = _decode_batch_sampled(
+            chunk_canvases, chunk_fwd = _decode_batch_sampled(
                 model=model,
                 prompt_ids=prompt_ids,
                 batch_size=chunk_n,
@@ -172,6 +177,8 @@ class BestOfNDecoder(Decoder):
                 temperature=temperature,
                 seeds=chunk_seeds,
             )
+
+            total_forward_passes += chunk_fwd
 
             for canvas in chunk_canvases:
                 all_canvases.append(canvas)
@@ -201,6 +208,7 @@ class BestOfNDecoder(Decoder):
             text=text,
             trace=[bon_trace],  # type: ignore[arg-type]
             reward_calls_used=N,
+            forward_passes=total_forward_passes,
             prompt_len=prompt_len,
             config=config,
         )
