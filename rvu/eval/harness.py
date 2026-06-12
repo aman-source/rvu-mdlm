@@ -16,8 +16,35 @@ from typing import Any, Dict, List, Optional
 import torch
 import yaml
 
-from rvu.models.tiny import TinyMDLM
+from rvu.models.base import MDLM
 from rvu.decoding.base import expected_steps
+
+VALID_MODELS = ("tiny", "llada")
+
+
+def _import_llada():
+    """Lazy-import LLaDAMDLM. Separate function for testability."""
+    from rvu.models.llada import LLaDAMDLM
+    return LLaDAMDLM
+
+
+def build_model(config: Dict[str, Any]) -> MDLM:
+    """Construct model from config. Lazy-imports GPU models."""
+    model_name = config.get("model", "tiny")
+    max_len = config.get("max_len", 128)
+    device = config.get("device", "cpu")
+
+    if model_name == "tiny":
+        from rvu.models.tiny import TinyMDLM
+        return TinyMDLM(max_len=max_len, device=device)
+    elif model_name == "llada":
+        cls = _import_llada()
+        model_path = config.get("model_path", "GSAI-ML/LLaDA-8B-Instruct")
+        return cls(model_path=model_path, max_len=max_len, device=device)
+    else:
+        raise ValueError(
+            f"Unknown model: {model_name!r}. Valid options: {VALID_MODELS}"
+        )
 from rvu.decoding.vanilla import VanillaDecoder
 from rvu.decoding.rvu import RVUDecoder
 from rvu.decoding.best_of_n import BestOfNDecoder, matched_n_per_case
@@ -81,8 +108,9 @@ def run_harness(
     print(f"Loaded {len(cases)} cases from {ds_path}")
 
     # Build model
-    print("Building tiny model...")
-    model = TinyMDLM(max_len=max_len, device=device)
+    model_name = config.get("model", "tiny")
+    print(f"Building model: {model_name}...")
+    model = build_model(config)
     print(f"Model: {model.param_count():,} params, vocab={model.vocab_size}, mask_id={model.mask_id}")
 
     # Results directory

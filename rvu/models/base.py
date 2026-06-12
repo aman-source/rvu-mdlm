@@ -49,6 +49,10 @@ class MDLM(ABC):
         """
         return canvas == self.mask_id
 
+    def param_count(self) -> int:
+        """Total number of model parameters. Override in subclasses."""
+        return 0
+
     def fully_masked_canvas(self, length: Optional[int] = None) -> Tensor:
         """Create a canvas of all [MASK] tokens.
 
