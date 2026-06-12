@@ -1,0 +1,12 @@
+K: 8
+lambda: 5.0
+tau_f: 0.7
+steps: 32
+device: "cuda:0"
+model: llada
+model_path: "GSAI-ML/LLaDA-8B-Instruct"
+seeds: [42]
+max_len: 256
+dataset_path: data/kill_test_cases.jsonl
+b1_batch_size: 8
+b1_n: 8
